@@ -2,7 +2,7 @@
 using BookCatalog.Api.Models;
 using BookCatalog.Api.Services;
 using Microsoft.AspNetCore.Mvc;
-
+using BookCatalog.Api.Exceptions;
 namespace BookCatalog.Api.Controllers;
 
 [ApiController]
@@ -26,15 +26,35 @@ public class BooksController(IBookService bookService) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Book>> Create(CreateBookRequest request)
     {
-        var book = await bookService.CreateAsync(request);
-        return CreatedAtAction(nameof(GetById), new { id = book.Id }, book);
+        try
+        {
+            var book = await bookService.CreateAsync(request);
+            return CreatedAtAction(nameof(GetById), new { id = book.Id }, book);
+        }
+        catch (DuplicateIsbnException ex)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Duplicate ISBN",
+                detail: ex.Message);
+        }
     }
 
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<Book>> Update(Guid id, UpdateBookRequest request)
     {
-        var book = await bookService.UpdateAsync(id, request);
-        return book is null ? NotFound() : Ok(book);
+        try
+        {
+            var book = await bookService.UpdateAsync(id, request);
+            return book is null ? NotFound() : Ok(book);
+        }
+        catch (DuplicateIsbnException ex)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Duplicate ISBN",
+                detail: ex.Message);
+        }
     }
 
     [HttpDelete("{id:guid}")]
