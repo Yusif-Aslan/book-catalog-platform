@@ -1,10 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using BookCatalog.Api.Contracts;
-using BookCatalog.Api.Models;
 using BookCatalog.Api.Exceptions;
+using BookCatalog.Api.Models;
+
 namespace BookCatalog.Api.Services;
 
-public class InMemoryBookService : IBookService
+public class InMemoryBookService(ILogger<InMemoryBookService> logger) : IBookService
 {
     private readonly ConcurrentDictionary<Guid, Book> _books = new();
     private readonly Lock _writeLock = new();
@@ -14,12 +15,16 @@ public class InMemoryBookService : IBookService
         IReadOnlyList<Book> books = _books.Values
             .OrderBy(b => b.CreatedAt)
             .ToList();
+
+        logger.LogDebug("Retrieved {BookCount} books", books.Count);
         return Task.FromResult(books);
     }
 
     public Task<Book?> GetByIdAsync(Guid id)
     {
-        _books.TryGetValue(id, out var book);
+        if (!_books.TryGetValue(id, out var book))
+            logger.LogDebug("Book {BookId} not found", id);
+
         return Task.FromResult(book);
     }
 
@@ -45,6 +50,11 @@ public class InMemoryBookService : IBookService
             };
 
             _books[book.Id] = book;
+
+            logger.LogInformation(
+                "Created book {BookId} with title {Title} by {Author}",
+                book.Id, book.Title, book.Author);
+
             return Task.FromResult(book);
         }
     }
@@ -56,7 +66,10 @@ public class InMemoryBookService : IBookService
         lock (_writeLock)
         {
             if (!_books.TryGetValue(id, out var existing))
+            {
+                logger.LogInformation("Update skipped: book {BookId} not found", id);
                 return Task.FromResult<Book?>(null);
+            }
 
             EnsureIsbnIsUnique(isbn, excludeId: id);
 
@@ -71,11 +84,28 @@ public class InMemoryBookService : IBookService
                 CreatedAt = existing.CreatedAt,
                 UpdatedAt = DateTime.UtcNow
             };
+            
+            if (!_books.TryUpdate(id, updated, existing))
+            {
+                logger.LogInformation("Update skipped: book {BookId} was removed concurrently", id);
+                return Task.FromResult<Book?>(null);
+            }
 
-            // TryUpdate fails if the book was deleted in the meantime
-            var success = _books.TryUpdate(id, updated, existing);
-            return Task.FromResult(success ? updated : null);
+            logger.LogInformation("Updated book {BookId}", id);
+            return Task.FromResult<Book?>(updated);
         }
+    }
+
+    public Task<bool> DeleteAsync(Guid id)
+    {
+        var deleted = _books.TryRemove(id, out _);
+
+        if (deleted)
+            logger.LogInformation("Deleted book {BookId}", id);
+        else
+            logger.LogInformation("Delete skipped: book {BookId} not found", id);
+
+        return Task.FromResult(deleted);
     }
 
     private void EnsureIsbnIsUnique(string? isbn, Guid? excludeId)
@@ -84,14 +114,12 @@ public class InMemoryBookService : IBookService
             return;
 
         if (_books.Values.Any(b => b.Id != excludeId && b.Isbn == isbn))
+        {
+            logger.LogWarning("Rejected book with duplicate ISBN {Isbn}", isbn);
             throw new DuplicateIsbnException(isbn);
+        }
     }
 
     private static string? NormalizeIsbn(string? isbn) =>
         isbn?.Replace("-", "").Replace(" ", "").ToUpperInvariant();
-
-    public Task<bool> DeleteAsync(Guid id)
-    {
-        return Task.FromResult(_books.TryRemove(id, out _));
-    }
 }
