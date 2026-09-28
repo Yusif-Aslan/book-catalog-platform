@@ -3,7 +3,17 @@ using BookCatalog.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        document.Info.Title = "Book Catalog API";
+        document.Info.Description =
+            "REST API for managing a book catalog. " +
+            "Errors are returned as ProblemDetails (RFC 9457).";
+        return Task.CompletedTask;
+    });
+});
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IBookService, InMemoryBookService>();
 
