@@ -1,5 +1,5 @@
 ﻿using BookCatalog.Api.Contracts;
-using BookCatalog.Api.Models;
+using BookCatalog.Domain.Books;
 
 namespace BookCatalog.Api.Services;
 
