@@ -1,4 +1,4 @@
-﻿namespace BookCatalog.Api.Exceptions;
+﻿namespace BookCatalog.Application.Exceptions;
 
 public class DuplicateIsbnException(string isbn)
     : Exception($"A book with ISBN '{isbn}' already exists.")
