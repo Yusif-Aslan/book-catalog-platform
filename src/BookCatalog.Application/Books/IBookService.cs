@@ -1,7 +1,6 @@
-﻿using BookCatalog.Application.Books;
-using BookCatalog.Domain.Books;
+﻿using BookCatalog.Domain.Books;
 
-namespace BookCatalog.Api.Services;
+namespace BookCatalog.Application.Books;
 
 public interface IBookService
 {

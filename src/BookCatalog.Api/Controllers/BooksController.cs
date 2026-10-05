@@ -1,5 +1,5 @@
 ﻿using BookCatalog.Api.Contracts;
-using BookCatalog.Api.Services;
+using BookCatalog.Application.Books;
 using BookCatalog.Application.Exceptions;
 using BookCatalog.Domain.Books;
 using Microsoft.AspNetCore.Mvc;

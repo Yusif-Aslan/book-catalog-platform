@@ -1,9 +1,9 @@
 ﻿using BookCatalog.Application.Abstractions;
-using BookCatalog.Application.Books;
 using BookCatalog.Application.Exceptions;
 using BookCatalog.Domain.Books;
+using Microsoft.Extensions.Logging;
 
-namespace BookCatalog.Api.Services;
+namespace BookCatalog.Application.Books;
 
 public class BookService(
     IBookRepository repository,
