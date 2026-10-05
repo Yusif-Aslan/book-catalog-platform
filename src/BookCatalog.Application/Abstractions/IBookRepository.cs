@@ -1,10 +1,12 @@
-﻿using BookCatalog.Domain.Books;
+﻿using BookCatalog.Application.Books;
+using BookCatalog.Application.Common;
+using BookCatalog.Domain.Books;
 
 namespace BookCatalog.Application.Abstractions;
 
 public interface IBookRepository
 {
-    Task<IReadOnlyList<Book>> GetAllAsync(CancellationToken cancellationToken = default);
+    Task<PagedResult<Book>> GetPageAsync(BookQuery query, CancellationToken cancellationToken = default);
 
     Task<Book?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
