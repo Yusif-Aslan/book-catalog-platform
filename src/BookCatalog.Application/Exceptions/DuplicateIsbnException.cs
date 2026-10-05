@@ -1,7 +1,7 @@
 ﻿namespace BookCatalog.Application.Exceptions;
 
-public class DuplicateIsbnException(string isbn)
-    : Exception($"A book with ISBN '{isbn}' already exists.")
+public sealed class DuplicateIsbnException(string isbn)
+    : ConflictException("Duplicate ISBN", $"A book with ISBN '{isbn}' already exists.")
 {
     public string Isbn { get; } = isbn;
 }
