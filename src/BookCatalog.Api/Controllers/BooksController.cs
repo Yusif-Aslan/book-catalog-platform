@@ -1,7 +1,6 @@
 ﻿using BookCatalog.Api.Contracts;
 using BookCatalog.Application.Books;
 using BookCatalog.Application.Exceptions;
-using BookCatalog.Domain.Books;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookCatalog.Api.Controllers;
@@ -15,22 +14,22 @@ public class BooksController(IBookService bookService) : ControllerBase
     [HttpGet]
     [EndpointSummary("Get all books")]
     [EndpointDescription("Returns all books in the catalog, ordered by creation time.")]
-    [ProducesResponseType(typeof(IReadOnlyList<Book>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<Book>>> GetAll()
+    [ProducesResponseType(typeof(IReadOnlyList<BookResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<BookResponse>>> GetAll()
     {
         var books = await bookService.GetAllAsync();
-        return Ok(books);
+        return Ok(books.Select(b => b.ToResponse()).ToList());
     }
 
     [HttpGet("{id:guid}")]
     [EndpointSummary("Get a book by id")]
     [EndpointDescription("Returns a single book. Responds with 404 if no book has the given id.")]
-    [ProducesResponseType(typeof(Book), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BookResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<Book>> GetById(Guid id)
+    public async Task<ActionResult<BookResponse>> GetById(Guid id)
     {
         var book = await bookService.GetByIdAsync(id);
-        return book is null ? NotFound() : Ok(book);
+        return book is null ? NotFound() : Ok(book.ToResponse());
     }
 
     [HttpPost]
@@ -39,15 +38,15 @@ public class BooksController(IBookService bookService) : ControllerBase
         "Creates a new book. Title and author are required. " +
         "ISBN is optional but must be a valid ISBN-10 or ISBN-13 and unique across the catalog. " +
         "Published year must be between 1450 and the current year.")]
-    [ProducesResponseType(typeof(Book), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(BookResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<Book>> Create(CreateBookRequest request)
+    public async Task<ActionResult<BookResponse>> Create(CreateBookRequest request)
     {
         try
         {
             var book = await bookService.CreateAsync(request.ToDetails());
-            return CreatedAtAction(nameof(GetById), new { id = book.Id }, book);
+            return CreatedAtAction(nameof(GetById), new { id = book.Id }, book.ToResponse());
         }
         catch (DuplicateIsbnException ex)
         {
@@ -63,16 +62,16 @@ public class BooksController(IBookService bookService) : ControllerBase
     [EndpointDescription(
         "Replaces all editable fields of an existing book. " +
         "The same validation rules as for creation apply.")]
-    [ProducesResponseType(typeof(Book), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BookResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<Book>> Update(Guid id, UpdateBookRequest request)
+    public async Task<ActionResult<BookResponse>> Update(Guid id, UpdateBookRequest request)
     {
         try
         {
             var book = await bookService.UpdateAsync(id, request.ToDetails());
-            return book is null ? NotFound() : Ok(book);
+            return book is null ? NotFound() : Ok(book.ToResponse());
         }
         catch (DuplicateIsbnException ex)
         {
