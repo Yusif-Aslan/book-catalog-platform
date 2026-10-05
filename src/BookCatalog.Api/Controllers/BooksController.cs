@@ -1,6 +1,5 @@
 ﻿using BookCatalog.Api.Contracts;
 using BookCatalog.Application.Books;
-using BookCatalog.Application.Exceptions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookCatalog.Api.Controllers;
@@ -43,18 +42,8 @@ public class BooksController(IBookService bookService) : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<BookResponse>> Create(CreateBookRequest request)
     {
-        try
-        {
-            var book = await bookService.CreateAsync(request.ToDetails());
-            return CreatedAtAction(nameof(GetById), new { id = book.Id }, book.ToResponse());
-        }
-        catch (DuplicateIsbnException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Duplicate ISBN",
-                detail: ex.Message);
-        }
+        var book = await bookService.CreateAsync(request.ToDetails());
+        return CreatedAtAction(nameof(GetById), new { id = book.Id }, book.ToResponse());
     }
 
     [HttpPut("{id:guid}")]
@@ -68,18 +57,8 @@ public class BooksController(IBookService bookService) : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<BookResponse>> Update(Guid id, UpdateBookRequest request)
     {
-        try
-        {
-            var book = await bookService.UpdateAsync(id, request.ToDetails());
-            return book is null ? NotFound() : Ok(book.ToResponse());
-        }
-        catch (DuplicateIsbnException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Duplicate ISBN",
-                detail: ex.Message);
-        }
+        var book = await bookService.UpdateAsync(id, request.ToDetails());
+        return book is null ? NotFound() : Ok(book.ToResponse());
     }
 
     [HttpDelete("{id:guid}")]
