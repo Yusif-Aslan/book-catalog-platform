@@ -1,6 +1,7 @@
 using BookCatalog.Application.Books;
 using BookCatalog.Application.Abstractions;
 using BookCatalog.Infrastructure.Persistence;
+using BookCatalog.Api.ErrorHandling;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,7 @@ builder.Services.AddOpenApi(options =>
     });
 });
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddSingleton<IBookRepository, InMemoryBookRepository>();
 builder.Services.AddScoped<IBookService, BookService>();
 
