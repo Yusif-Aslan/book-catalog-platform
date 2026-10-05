@@ -2,6 +2,7 @@
 using BookCatalog.Application.Exceptions;
 using BookCatalog.Domain.Books;
 using Microsoft.Extensions.Logging;
+using BookCatalog.Application.Common;
 
 namespace BookCatalog.Application.Books;
 
@@ -9,12 +10,15 @@ public class BookService(
     IBookRepository repository,
     ILogger<BookService> logger) : IBookService
 {
-    public async Task<IReadOnlyList<Book>> GetAllAsync()
+    public async Task<PagedResult<Book>> GetPageAsync(BookQuery query)
     {
-        var books = await repository.GetAllAsync();
+        var page = await repository.GetPageAsync(query);
 
-        logger.LogDebug("Retrieved {BookCount} books", books.Count);
-        return books;
+        logger.LogDebug(
+            "Retrieved page {Page} with {ItemCount} of {TotalCount} books",
+            page.Page, page.Items.Count, page.TotalCount);
+
+        return page;
     }
 
     public async Task<Book?> GetByIdAsync(Guid id)

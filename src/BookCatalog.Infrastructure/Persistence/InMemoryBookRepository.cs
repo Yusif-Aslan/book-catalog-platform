@@ -2,6 +2,8 @@
 using BookCatalog.Application.Abstractions;
 using BookCatalog.Application.Exceptions;
 using BookCatalog.Domain.Books;
+using BookCatalog.Application.Books;
+using BookCatalog.Application.Common;
 
 namespace BookCatalog.Infrastructure.Persistence;
 
@@ -10,13 +12,36 @@ public class InMemoryBookRepository : IBookRepository
     private readonly ConcurrentDictionary<Guid, Book> _books = new();
     private readonly Lock _writeLock = new();
 
-    public Task<IReadOnlyList<Book>> GetAllAsync(CancellationToken cancellationToken = default)
+    public Task<PagedResult<Book>> GetPageAsync(BookQuery query, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<Book> books = _books.Values
+        var books = _books.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(query.Title))
+            books = books.Where(b => b.Title.Contains(query.Title, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(query.Author))
+            books = books.Where(b => b.Author.Contains(query.Author, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(query.Genre))
+            books = books.Where(b => string.Equals(b.Genre, query.Genre, StringComparison.OrdinalIgnoreCase));
+
+        if (query.PublishedFrom is not null)
+            books = books.Where(b => b.PublishedYear >= query.PublishedFrom);
+
+        if (query.PublishedTo is not null)
+            books = books.Where(b => b.PublishedYear <= query.PublishedTo);
+
+        var matching = books
             .OrderBy(b => b.CreatedAt)
+            .ThenBy(b => b.Id)
             .ToList();
 
-        return Task.FromResult(books);
+        var items = matching
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToList();
+
+        return Task.FromResult(new PagedResult<Book>(items, query.Page, query.PageSize, matching.Count));
     }
 
     public Task<Book?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

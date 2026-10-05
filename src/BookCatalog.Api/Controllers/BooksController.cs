@@ -11,13 +11,18 @@ namespace BookCatalog.Api.Controllers;
 public class BooksController(IBookService bookService) : ControllerBase
 {
     [HttpGet]
-    [EndpointSummary("Get all books")]
-    [EndpointDescription("Returns all books in the catalog, ordered by creation time.")]
-    [ProducesResponseType(typeof(IReadOnlyList<BookResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<BookResponse>>> GetAll()
+    [EndpointSummary("Get books")]
+    [EndpointDescription(
+        "Returns one page of books ordered by creation time, " +
+        "together with the total number of matching books and pages. " +
+        "Title and author match partially, genre matches exactly; all text filters ignore case. " +
+        "Filters can be combined.")]
+    [ProducesResponseType(typeof(PagedResponse<BookResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResponse<BookResponse>>> GetAll([FromQuery] GetBooksRequest request)
     {
-        var books = await bookService.GetAllAsync();
-        return Ok(books.Select(b => b.ToResponse()).ToList());
+        var page = await bookService.GetPageAsync(request.ToQuery());
+        return Ok(page.ToResponse());
     }
 
     [HttpGet("{id:guid}")]
