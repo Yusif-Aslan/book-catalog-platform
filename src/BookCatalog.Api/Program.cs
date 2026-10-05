@@ -18,7 +18,7 @@ builder.Services.AddOpenApi(options =>
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddSingleton<IBookRepository, InMemoryBookRepository>();
-builder.Services.AddScoped<IBookService, InMemoryBookService>();
+builder.Services.AddScoped<IBookService, BookService>();
 
 var app = builder.Build();
 

@@ -5,9 +5,9 @@ using BookCatalog.Domain.Books;
 
 namespace BookCatalog.Api.Services;
 
-public class InMemoryBookService(
+public class BookService(
     IBookRepository repository,
-    ILogger<InMemoryBookService> logger) : IBookService
+    ILogger<BookService> logger) : IBookService
 {
     public async Task<IReadOnlyList<Book>> GetAllAsync()
     {
