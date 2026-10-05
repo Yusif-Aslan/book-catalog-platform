@@ -13,7 +13,14 @@ public static class BookMappings
         new(request.Title, request.Author, request.Isbn, request.PublishedYear, request.Genre);
 
     public static BookQuery ToQuery(this GetBooksRequest request) =>
-        new(request.Page, request.PageSize);
+        new(
+            request.Page,
+            request.PageSize,
+            request.Title?.Trim(),
+            request.Author?.Trim(),
+            request.Genre?.Trim(),
+            request.PublishedFrom,
+            request.PublishedTo);
 
     public static BookResponse ToResponse(this Book book) =>
         new(

@@ -14,7 +14,9 @@ public class BooksController(IBookService bookService) : ControllerBase
     [EndpointSummary("Get books")]
     [EndpointDescription(
         "Returns one page of books ordered by creation time, " +
-        "together with the total number of books and pages.")]
+        "together with the total number of matching books and pages. " +
+        "Title and author match partially, genre matches exactly; all text filters ignore case. " +
+        "Filters can be combined.")]
     [ProducesResponseType(typeof(PagedResponse<BookResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResponse<BookResponse>>> GetAll([FromQuery] GetBooksRequest request)

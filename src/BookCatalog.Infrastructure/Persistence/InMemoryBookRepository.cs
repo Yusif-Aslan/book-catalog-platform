@@ -16,6 +16,21 @@ public class InMemoryBookRepository : IBookRepository
     {
         var books = _books.Values.AsEnumerable();
 
+        if (!string.IsNullOrWhiteSpace(query.Title))
+            books = books.Where(b => b.Title.Contains(query.Title, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(query.Author))
+            books = books.Where(b => b.Author.Contains(query.Author, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(query.Genre))
+            books = books.Where(b => string.Equals(b.Genre, query.Genre, StringComparison.OrdinalIgnoreCase));
+
+        if (query.PublishedFrom is not null)
+            books = books.Where(b => b.PublishedYear >= query.PublishedFrom);
+
+        if (query.PublishedTo is not null)
+            books = books.Where(b => b.PublishedYear <= query.PublishedTo);
+
         var matching = books
             .OrderBy(b => b.CreatedAt)
             .ThenBy(b => b.Id)
