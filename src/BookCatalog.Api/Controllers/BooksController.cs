@@ -1,7 +1,7 @@
 ﻿using BookCatalog.Api.Contracts;
-using BookCatalog.Api.Exceptions;
-using BookCatalog.Api.Models;
 using BookCatalog.Api.Services;
+using BookCatalog.Application.Exceptions;
+using BookCatalog.Domain.Books;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookCatalog.Api.Controllers;
@@ -46,7 +46,7 @@ public class BooksController(IBookService bookService) : ControllerBase
     {
         try
         {
-            var book = await bookService.CreateAsync(request);
+            var book = await bookService.CreateAsync(request.ToDetails());
             return CreatedAtAction(nameof(GetById), new { id = book.Id }, book);
         }
         catch (DuplicateIsbnException ex)
@@ -71,7 +71,7 @@ public class BooksController(IBookService bookService) : ControllerBase
     {
         try
         {
-            var book = await bookService.UpdateAsync(id, request);
+            var book = await bookService.UpdateAsync(id, request.ToDetails());
             return book is null ? NotFound() : Ok(book);
         }
         catch (DuplicateIsbnException ex)

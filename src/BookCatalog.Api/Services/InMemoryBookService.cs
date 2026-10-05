@@ -1,5 +1,5 @@
-﻿using BookCatalog.Api.Contracts;
-using BookCatalog.Application.Abstractions;
+﻿using BookCatalog.Application.Abstractions;
+using BookCatalog.Application.Books;
 using BookCatalog.Application.Exceptions;
 using BookCatalog.Domain.Books;
 
@@ -27,9 +27,9 @@ public class InMemoryBookService(
         return book;
     }
 
-    public async Task<Book> CreateAsync(CreateBookRequest request)
+    public async Task<Book> CreateAsync(BookDetails details)
     {
-        var isbn = NormalizeIsbn(request.Isbn);
+        var isbn = NormalizeIsbn(details.Isbn);
 
         await EnsureIsbnIsUniqueAsync(isbn, excludeId: null);
 
@@ -37,11 +37,11 @@ public class InMemoryBookService(
         var book = new Book
         {
             Id = Guid.NewGuid(),
-            Title = request.Title,
-            Author = request.Author,
+            Title = details.Title,
+            Author = details.Author,
             Isbn = isbn,
-            PublishedYear = request.PublishedYear,
-            Genre = request.Genre,
+            PublishedYear = details.PublishedYear,
+            Genre = details.Genre,
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -55,9 +55,9 @@ public class InMemoryBookService(
         return book;
     }
 
-    public async Task<Book?> UpdateAsync(Guid id, UpdateBookRequest request)
+    public async Task<Book?> UpdateAsync(Guid id, BookDetails details)
     {
-        var isbn = NormalizeIsbn(request.Isbn);
+        var isbn = NormalizeIsbn(details.Isbn);
 
         var existing = await repository.GetByIdAsync(id);
         if (existing is null)
@@ -71,11 +71,11 @@ public class InMemoryBookService(
         var updated = new Book
         {
             Id = existing.Id,
-            Title = request.Title,
-            Author = request.Author,
+            Title = details.Title,
+            Author = details.Author,
             Isbn = isbn,
-            PublishedYear = request.PublishedYear,
-            Genre = request.Genre,
+            PublishedYear = details.PublishedYear,
+            Genre = details.Genre,
             CreatedAt = existing.CreatedAt,
             UpdatedAt = DateTime.UtcNow
         };
