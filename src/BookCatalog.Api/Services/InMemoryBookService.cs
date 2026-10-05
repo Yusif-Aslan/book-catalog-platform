@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using BookCatalog.Api.Contracts;
-using BookCatalog.Api.Exceptions;
-using BookCatalog.Api.Models;
+using BookCatalog.Application.Exceptions;
+using BookCatalog.Domain.Books;
 
 namespace BookCatalog.Api.Services;
 
