@@ -20,6 +20,7 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddSingleton<IBookRepository, InMemoryBookRepository>();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IBookService, BookService>();
 
 var app = builder.Build();

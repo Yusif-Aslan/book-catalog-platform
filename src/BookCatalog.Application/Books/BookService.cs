@@ -8,6 +8,7 @@ namespace BookCatalog.Application.Books;
 
 public class BookService(
     IBookRepository repository,
+    TimeProvider timeProvider,
     ILogger<BookService> logger) : IBookService
 {
     public async Task<PagedResult<Book>> GetPageAsync(BookQuery query)
@@ -37,7 +38,7 @@ public class BookService(
 
         await EnsureIsbnIsUniqueAsync(isbn, excludeId: null);
 
-        var now = DateTime.UtcNow;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         var book = new Book
         {
             Id = Guid.NewGuid(),
@@ -71,7 +72,7 @@ public class BookService(
         }
 
         await EnsureIsbnIsUniqueAsync(isbn, excludeId: id);
-
+        
         var updated = new Book
         {
             Id = existing.Id,
@@ -81,7 +82,7 @@ public class BookService(
             PublishedYear = details.PublishedYear,
             Genre = details.Genre,
             CreatedAt = existing.CreatedAt,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = timeProvider.GetUtcNow().UtcDateTime
         };
 
         if (!await repository.UpdateAsync(updated))
