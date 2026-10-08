@@ -19,9 +19,11 @@ public class BooksController(IBookService bookService) : ControllerBase
         "Filters can be combined.")]
     [ProducesResponseType(typeof(PagedResponse<BookResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<PagedResponse<BookResponse>>> GetAll([FromQuery] GetBooksRequest request)
+    public async Task<ActionResult<PagedResponse<BookResponse>>> GetAll(
+        [FromQuery] GetBooksRequest request,
+        CancellationToken cancellationToken)
     {
-        var page = await bookService.GetPageAsync(request.ToQuery());
+        var page = await bookService.GetPageAsync(request.ToQuery(), cancellationToken);
         return Ok(page.ToResponse());
     }
 
@@ -30,9 +32,11 @@ public class BooksController(IBookService bookService) : ControllerBase
     [EndpointDescription("Returns a single book. Responds with 404 if no book has the given id.")]
     [ProducesResponseType(typeof(BookResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<BookResponse>> GetById(Guid id)
+    public async Task<ActionResult<BookResponse>> GetById(
+        Guid id,
+        CancellationToken cancellationToken)
     {
-        var book = await bookService.GetByIdAsync(id);
+        var book = await bookService.GetByIdAsync(id, cancellationToken);  
         return book is null ? NotFound() : Ok(book.ToResponse());
     }
 
@@ -45,9 +49,11 @@ public class BooksController(IBookService bookService) : ControllerBase
     [ProducesResponseType(typeof(BookResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<BookResponse>> Create(CreateBookRequest request)
+    public async Task<ActionResult<BookResponse>> Create(
+        CreateBookRequest request,
+        CancellationToken cancellationToken)
     {
-        var book = await bookService.CreateAsync(request.ToDetails());
+        var book = await bookService.CreateAsync(request.ToDetails(), cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = book.Id }, book.ToResponse());
     }
 
@@ -60,9 +66,12 @@ public class BooksController(IBookService bookService) : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<BookResponse>> Update(Guid id, UpdateBookRequest request)
+    public async Task<ActionResult<BookResponse>> Update(
+        Guid id,
+        UpdateBookRequest request,
+        CancellationToken cancellationToken)
     {
-        var book = await bookService.UpdateAsync(id, request.ToDetails());
+        var book = await bookService.UpdateAsync(id, request.ToDetails(), cancellationToken);
         return book is null ? NotFound() : Ok(book.ToResponse());
     }
 
@@ -71,9 +80,11 @@ public class BooksController(IBookService bookService) : ControllerBase
     [EndpointDescription("Deletes a book. Responds with 404 if no book has the given id.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(
+        Guid id,
+        CancellationToken cancellationToken)
     {
-        var deleted = await bookService.DeleteAsync(id);
+        var deleted = await bookService.DeleteAsync(id, cancellationToken);
         return deleted ? NoContent() : NotFound();
     }
 }
