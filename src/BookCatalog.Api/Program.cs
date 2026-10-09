@@ -1,6 +1,6 @@
 using BookCatalog.Application.Books;
 using BookCatalog.Application.Abstractions;
-using BookCatalog.Infrastructure.Persistence;
+using BookCatalog.Infrastructure;
 using BookCatalog.Api.ErrorHandling;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,7 +19,11 @@ builder.Services.AddOpenApi(options =>
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddSingleton<IBookRepository, InMemoryBookRepository>();
+
+var connectionString = builder.Configuration.GetConnectionString("BookCatalog")
+                       ?? throw new InvalidOperationException("Connection string 'BookCatalog' is not configured.");
+
+builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IBookService, BookService>();
 
