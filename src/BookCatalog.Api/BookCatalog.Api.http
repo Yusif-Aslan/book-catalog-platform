@@ -1,3 +1,123 @@
-@BookCatalog.Api_HostAddress = http://localhost:5095
+@host = https://localhost:7134
+@missingId = 00000000-0000-0000-0000-000000000001
 
+### 1a. Create book: Clean Code
+POST {{host}}/api/books
+Content-Type: application/json
 
+{
+  "title": "Clean Code",
+  "author": "Robert C. Martin",
+  "isbn": "978-0-13-235088-4",
+  "publishedYear": 2008,
+  "genre": "Programming"
+}
+
+> {%
+    client.test("Book created", function () {
+        client.assert(response.status === 201, "Expected 201, got " + response.status);
+    });
+    if (response.status === 201) {
+        client.global.set("bookId", response.body.id);
+    }
+%}
+
+### 1b. Create book: Design Patterns
+POST {{host}}/api/books
+Content-Type: application/json
+
+{
+  "title": "Design Patterns",
+  "author": "Erich Gamma",
+  "isbn": "0-201-63361-2",
+  "publishedYear": 1994,
+  "genre": "Programming"
+}
+
+> {%
+    client.test("Book created", function () {
+        client.assert(response.status === 201, "Expected 201, got " + response.status);
+    });
+%}
+
+### 1c. Create book: Refactoring
+POST {{host}}/api/books
+Content-Type: application/json
+
+{
+  "title": "Refactoring",
+  "author": "Martin Fowler",
+  "isbn": "978-0-13-475759-9",
+  "publishedYear": 2018,
+  "genre": "Programming"
+}
+
+> {%
+    client.test("Book created", function () {
+        client.assert(response.status === 201, "Expected 201, got " + response.status);
+    });
+%}
+
+### 2. Filter by title with paging
+GET {{host}}/api/books?title=e&page=1&pageSize=2
+
+> {%
+    client.test("Returns one page", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.items.length === 2, "Expected 2 items, got " + response.body.items.length);
+    });
+%}
+
+### 3. Duplicate ISBN (same as Clean Code, without hyphens)
+POST {{host}}/api/books
+Content-Type: application/json
+
+{
+  "title": "Clean Code (copy)",
+  "author": "Robert C. Martin",
+  "isbn": "9780132350884",
+  "publishedYear": 2008,
+  "genre": "Programming"
+}
+
+> {%
+    client.test("Duplicate ISBN returns 409", function () {
+        client.assert(response.status === 409, "Expected 409, got " + response.status);
+    });
+%}
+
+### 4a. Update missing book
+PUT {{host}}/api/books/{{missingId}}
+Content-Type: application/json
+
+{
+  "title": "The Pragmatic Programmer",
+  "author": "David Thomas, Andrew Hunt",
+  "isbn": "978-0-13-595705-9",
+  "publishedYear": 2019,
+  "genre": "Programming"
+}
+
+> {%
+    client.test("Update missing returns 404", function () {
+        client.assert(response.status === 404, "Expected 404, got " + response.status);
+    });
+%}
+
+### 4b. Delete missing book
+DELETE {{host}}/api/books/{{missingId}}
+
+> {%
+    client.test("Delete missing returns 404", function () {
+        client.assert(response.status === 404, "Expected 404, got " + response.status);
+    });
+%}
+
+### 5. Get created book (run after app restart)
+GET {{host}}/api/books/{{bookId}}
+
+> {%
+    client.test("Book survived restart", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
