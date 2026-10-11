@@ -11,9 +11,9 @@ public class BookService(
     TimeProvider timeProvider,
     ILogger<BookService> logger) : IBookService
 {
-    public async Task<PagedResult<Book>> GetPageAsync(BookQuery query)
+    public async Task<PagedResult<Book>> GetPageAsync(BookQuery query, CancellationToken cancellationToken = default)
     {
-        var page = await repository.GetPageAsync(query);
+        var page = await repository.GetPageAsync(query, cancellationToken);
 
         logger.LogDebug(
             "Retrieved page {Page} with {ItemCount} of {TotalCount} books",
@@ -22,9 +22,9 @@ public class BookService(
         return page;
     }
 
-    public async Task<Book?> GetByIdAsync(Guid id)
+    public async Task<Book?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var book = await repository.GetByIdAsync(id);
+        var book = await repository.GetByIdAsync(id, cancellationToken);
 
         if (book is null)
             logger.LogDebug("Book {BookId} not found", id);
@@ -32,11 +32,11 @@ public class BookService(
         return book;
     }
 
-    public async Task<Book> CreateAsync(BookDetails details)
+    public async Task<Book> CreateAsync(BookDetails details, CancellationToken cancellationToken = default) 
     {
         var isbn = NormalizeIsbn(details.Isbn);
 
-        await EnsureIsbnIsUniqueAsync(isbn, excludeId: null);
+        await EnsureIsbnIsUniqueAsync(isbn, excludeId: null, cancellationToken); 
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var book = new Book
@@ -51,7 +51,7 @@ public class BookService(
             UpdatedAt = now
         };
 
-        await repository.AddAsync(book);
+        await repository.AddAsync(book, cancellationToken);
 
         logger.LogInformation(
             "Created book {BookId} with title {Title} by {Author}",
@@ -60,19 +60,19 @@ public class BookService(
         return book;
     }
 
-    public async Task<Book?> UpdateAsync(Guid id, BookDetails details)
+    public async Task<Book?> UpdateAsync(Guid id, BookDetails details, CancellationToken cancellationToken = default)
     {
         var isbn = NormalizeIsbn(details.Isbn);
 
-        var existing = await repository.GetByIdAsync(id);
+        var existing = await repository.GetByIdAsync(id, cancellationToken);
         if (existing is null)
         {
             logger.LogInformation("Update skipped: book {BookId} not found", id);
             return null;
         }
 
-        await EnsureIsbnIsUniqueAsync(isbn, excludeId: id);
-        
+        await EnsureIsbnIsUniqueAsync(isbn, excludeId: id, cancellationToken);
+
         var updated = new Book
         {
             Id = existing.Id,
@@ -85,7 +85,7 @@ public class BookService(
             UpdatedAt = timeProvider.GetUtcNow().UtcDateTime
         };
 
-        if (!await repository.UpdateAsync(updated))
+        if (!await repository.UpdateAsync(updated, cancellationToken))
         {
             logger.LogInformation("Update skipped: book {BookId} was removed concurrently", id);
             return null;
@@ -95,9 +95,9 @@ public class BookService(
         return updated;
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var deleted = await repository.DeleteAsync(id);
+        var deleted = await repository.DeleteAsync(id, cancellationToken);
 
         if (deleted)
             logger.LogInformation("Deleted book {BookId}", id);
@@ -107,12 +107,12 @@ public class BookService(
         return deleted;
     }
 
-    private async Task EnsureIsbnIsUniqueAsync(string? isbn, Guid? excludeId)
+    private async Task EnsureIsbnIsUniqueAsync(string? isbn, Guid? excludeId, CancellationToken cancellationToken)
     {
         if (isbn is null)
             return;
 
-        if (await repository.IsbnExistsAsync(isbn, excludeId))
+        if (await repository.IsbnExistsAsync(isbn, excludeId, cancellationToken))
         {
             logger.LogWarning("Rejected book with duplicate ISBN {Isbn}", isbn);
             throw new DuplicateIsbnException(isbn);
