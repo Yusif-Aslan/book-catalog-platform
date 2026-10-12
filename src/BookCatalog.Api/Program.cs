@@ -26,7 +26,7 @@ var connectionString = builder.Configuration.GetConnectionString("BookCatalog")
 builder.Services.AddInfrastructure(connectionString);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IBookService, BookService>();
-builder.Services.AddScoped<IBookService, BookService>();
+builder.Services.AddScoped<ILendingService, LendingService>();
 
 var app = builder.Build();
 
