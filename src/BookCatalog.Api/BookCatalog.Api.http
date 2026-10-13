@@ -17,9 +17,7 @@ Content-Type: application/json
     client.test("Book created", function () {
         client.assert(response.status === 201, "Expected 201, got " + response.status);
     });
-    if (response.status === 201) {
-        client.global.set("bookId", response.body.id);
-    }
+    client.global.set("bookId", response.body.id);
 %}
 
 ### 1b. Create book: Design Patterns
@@ -38,6 +36,7 @@ Content-Type: application/json
     client.test("Book created", function () {
         client.assert(response.status === 201, "Expected 201, got " + response.status);
     });
+    client.global.set("designPatternsId", response.body.id);
 %}
 
 ### 1c. Create book: Refactoring
@@ -56,6 +55,7 @@ Content-Type: application/json
     client.test("Book created", function () {
         client.assert(response.status === 201, "Expected 201, got " + response.status);
     });
+    client.global.set("refactoringId", response.body.id);
 %}
 
 ### 2. Filter by title with paging
@@ -68,7 +68,7 @@ GET {{host}}/api/books?title=e&page=1&pageSize=2
     });
 %}
 
-### 3. Duplicate ISBN (same as Clean Code, without hyphens)
+### 3. Duplicate ISBN
 POST {{host}}/api/books
 Content-Type: application/json
 
@@ -113,11 +113,177 @@ DELETE {{host}}/api/books/{{missingId}}
     });
 %}
 
-### 5. Get created book (run after app restart)
+### 5. Get created book
 GET {{host}}/api/books/{{bookId}}
 
 > {%
-    client.test("Book survived restart", function () {
+    client.test("Book is found", function () {
         client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+### 6a. Create book for lending (no ISBN, so it can be created on every run)
+POST {{host}}/api/books
+Content-Type: application/json
+
+{
+  "title": "Lending Test Book",
+  "author": "Test Author",
+  "publishedYear": 2020,
+  "genre": "Test"
+}
+
+> {%
+    client.test("Lending book created", function () {
+        client.assert(response.status === 201, "Expected 201, got " + response.status);
+    });
+    client.global.set("lendingBookId", response.body.id);
+%}
+
+### 6b. Add copy with a random inventory number
+POST {{host}}/api/books/{{lendingBookId}}/copies
+Content-Type: application/json
+
+{
+  "inventoryNumber": "INV-{{$random.alphanumeric(8)}}"
+}
+
+> {%
+    client.test("Copy created", function () {
+        client.assert(response.status === 201, "Expected 201, got " + response.status);
+    });
+    client.global.set("copyId", response.body.id);
+    client.global.set("inventoryNumber", response.body.inventoryNumber);
+%}
+
+### 6c. Duplicate inventory number
+POST {{host}}/api/books/{{lendingBookId}}/copies
+Content-Type: application/json
+
+{
+  "inventoryNumber": "{{inventoryNumber}}"
+}
+
+> {%
+    client.test("Duplicate inventory number returns 409", function () {
+        client.assert(response.status === 409, "Expected 409, got " + response.status);
+    });
+%}
+
+### 6d. List copies
+GET {{host}}/api/books/{{lendingBookId}}/copies
+
+> {%
+    client.test("Copy is available", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.length === 1, "Expected 1 copy, got " + response.body.length);
+        client.assert(response.body[0].isAvailable === true, "Expected copy to be available");
+    });
+%}
+
+### 7a. Borrow copy
+POST {{host}}/api/copies/{{copyId}}/borrow
+Content-Type: application/json
+
+{
+  "borrowerName": "Alice"
+}
+
+> {%
+    client.test("Borrow returns 201", function () {
+        client.assert(response.status === 201, "Expected 201, got " + response.status);
+    });
+%}
+
+### 7b. Borrow the same copy again
+POST {{host}}/api/copies/{{copyId}}/borrow
+Content-Type: application/json
+
+{
+  "borrowerName": "Bob"
+}
+
+> {%
+    client.test("Double borrow returns 409", function () {
+        client.assert(response.status === 409, "Expected 409, got " + response.status);
+    });
+%}
+
+### 7c. Return copy
+POST {{host}}/api/copies/{{copyId}}/return
+
+> {%
+    client.test("Return returns 200", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.returnedAt !== null, "Expected returnedAt to be set");
+    });
+%}
+
+### 7d. Return the same copy again
+POST {{host}}/api/copies/{{copyId}}/return
+
+> {%
+    client.test("Second return returns 409", function () {
+        client.assert(response.status === 409, "Expected 409, got " + response.status);
+    });
+%}
+
+### 7e. Loan history
+GET {{host}}/api/copies/{{copyId}}/loans
+
+> {%
+    client.test("History has one loan", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.length === 1, "Expected 1 loan, got " + response.body.length);
+    });
+%}
+
+### 7f. Borrow missing copy
+POST {{host}}/api/copies/{{missingId}}/borrow
+Content-Type: application/json
+
+{
+  "borrowerName": "Alice"
+}
+
+> {%
+    client.test("Borrow missing copy returns 404", function () {
+        client.assert(response.status === 404, "Expected 404, got " + response.status);
+    });
+%}
+
+### 8. Delete book with loan history
+DELETE {{host}}/api/books/{{lendingBookId}}
+
+> {%
+    client.test("Delete with history returns 409", function () {
+        client.assert(response.status === 409, "Expected 409, got " + response.status);
+    });
+%}
+
+### 9a. Cleanup: delete Clean Code
+DELETE {{host}}/api/books/{{bookId}}
+
+> {%
+    client.test("Deleted", function () {
+        client.assert(response.status === 204, "Expected 204, got " + response.status);
+    });
+%}
+
+### 9b. Cleanup: delete Design Patterns
+DELETE {{host}}/api/books/{{designPatternsId}}
+
+> {%
+    client.test("Deleted", function () {
+        client.assert(response.status === 204, "Expected 204, got " + response.status);
+    });
+%}
+
+### 9c. Cleanup: delete Refactoring
+DELETE {{host}}/api/books/{{refactoringId}}
+
+> {%
+    client.test("Deleted", function () {
+        client.assert(response.status === 204, "Expected 204, got " + response.status);
     });
 %}

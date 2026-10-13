@@ -5,7 +5,6 @@ using BookCatalog.Application.Exceptions;
 using BookCatalog.Domain.Books;
 using BookCatalog.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace BookCatalog.Infrastructure.Persistence;
 
@@ -91,11 +90,18 @@ public sealed class EfBookRepository(BookCatalogDbContext db) : IBookRepository
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var deletedRows = await db.Books
-            .Where(b => b.Id == id)
-            .ExecuteDeleteAsync(cancellationToken);
+        try
+        {
+            var deletedRows = await db.Books
+                .Where(b => b.Id == id)
+                .ExecuteDeleteAsync(cancellationToken);
 
-        return deletedRows > 0;
+            return deletedRows > 0;
+        }
+        catch (Exception ex) when (PostgresErrors.IsForeignKeyViolation(ex))     
+        {
+            throw new BookHasLoanHistoryException(id);                           
+        }
     }
 
     private async Task SaveChangesAsync(Book book, CancellationToken cancellationToken)
@@ -104,16 +110,11 @@ public sealed class EfBookRepository(BookCatalogDbContext db) : IBookRepository
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex, BookConfiguration.IsbnUniqueIndex))
+        catch (DbUpdateException ex) when (PostgresErrors.IsUniqueViolation(ex, BookConfiguration.IsbnUniqueIndex))
         {
             throw new DuplicateIsbnException(book.Isbn!);
         }
     }
-
-    private static bool IsUniqueViolation(DbUpdateException exception, string constraintName) =>
-        exception.InnerException is PostgresException postgres
-        && postgres.SqlState == PostgresErrorCodes.UniqueViolation
-        && postgres.ConstraintName == constraintName;
 
     private static string EscapeLikePattern(string value) =>
         value

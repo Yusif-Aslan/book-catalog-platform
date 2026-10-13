@@ -64,6 +64,93 @@ namespace BookCatalog.Infrastructure.Persistence.Migrations
 
                     b.ToTable("Books", (string)null);
                 });
+
+            modelBuilder.Entity("BookCatalog.Domain.Books.BookCopy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InventoryNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookId");
+
+                    b.HasIndex("InventoryNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_BookCopies_InventoryNumber");
+
+                    b.ToTable("BookCopies", (string)null);
+                });
+
+            modelBuilder.Entity("BookCatalog.Domain.Books.Loan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BookCopyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("BorrowedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("BorrowerName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("ReturnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookCopyId", "BorrowedAt");
+
+                    b.HasIndex(new[] { "BookCopyId" }, "IX_Loans_BookCopyId_Active")
+                        .IsUnique()
+                        .HasFilter("\"ReturnedAt\" IS NULL");
+
+                    b.ToTable("Loans", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Loans_ReturnedAt_After_BorrowedAt", "\"ReturnedAt\" IS NULL OR \"ReturnedAt\" >= \"BorrowedAt\"");
+                        });
+                });
+
+            modelBuilder.Entity("BookCatalog.Domain.Books.BookCopy", b =>
+                {
+                    b.HasOne("BookCatalog.Domain.Books.Book", "Book")
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Book");
+                });
+
+            modelBuilder.Entity("BookCatalog.Domain.Books.Loan", b =>
+                {
+                    b.HasOne("BookCatalog.Domain.Books.BookCopy", "BookCopy")
+                        .WithMany("Loans")
+                        .HasForeignKey("BookCopyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("BookCopy");
+                });
+
+            modelBuilder.Entity("BookCatalog.Domain.Books.BookCopy", b =>
+                {
+                    b.Navigation("Loans");
+                });
 #pragma warning restore 612, 618
         }
     }
