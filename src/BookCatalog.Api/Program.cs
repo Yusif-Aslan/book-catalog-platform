@@ -30,6 +30,9 @@ builder.Services.AddScoped<ILendingService, LendingService>();
 
 var app = builder.Build();
 
+if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+    await app.Services.ApplyMigrationsAsync();
+
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -46,4 +49,4 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-app.Run();
+await app.RunAsync(); 
