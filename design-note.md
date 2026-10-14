@@ -121,3 +121,110 @@ The week 1 code worked, but one class did too many things. That is why it was ha
 Splitting the ISBN check between the service and the repository and still keeping it safe.
 
 Also Git. When Rider moved files, it changed `using` in other files too, but only the moved files were committed. So some early commits do not build. Now the solution is built and all changed files are checked before each commit.
+
+
+
+# Week 3
+
+## What was built
+
+Books are stored in PostgreSQL with EF Core. A book can have copies, and a copy can be borrowed and returned. The app and the database start with one Docker command.
+
+## Structure
+
+The four projects stay the same. New parts:
+
+- `Domain` has `BookCopy` and `Loan`.
+- `Application` has `LendingService`, `ILendingRepository` and `ITransaction`.
+- `Infrastructure` has `BookCatalogDbContext`, entity configurations, migrations, `EfBookRepository` and `EfLendingRepository`.
+- `Api` has `LendingController`.
+
+## What changed
+
+- Books were stored in memory. Now they are stored in PostgreSQL.
+- `InMemoryBookRepository` is removed. `EfBookRepository` is used instead.
+- The `lock` for ISBN is removed. A unique index in the database does this job now.
+- Filtering and paging run in SQL.
+- Copies, borrowing, returning and loan history are added.
+
+## Data model
+
+- `Book` is a book in the catalog.
+- `BookCopy` is one physical copy of a book. It has a unique inventory number.
+- `Loan` is one borrowing of one copy. `ReturnedAt` is empty while the copy is borrowed.
+
+A copy is borrowed, not a book, because a library can have several copies of the same book.
+
+The loan history is all loans of a copy. A loan is active when `ReturnedAt` is empty.
+
+## Rules in the database
+
+- Foreign keys for all relations.
+- Unique index on `Books.Isbn` and on `BookCopies.InventoryNumber`.
+- Unique index on `Loans.BookCopyId` only for loans where `ReturnedAt` is empty. A copy can have many old loans, but only one active loan.
+- `ReturnedAt` cannot be earlier than `BorrowedAt`.
+
+The service also checks these rules to return clear errors. The database is the final check.
+
+## Delete rules
+
+- When a book is deleted, its copies are deleted too.
+- A copy with loans cannot be deleted. Loan history is kept.
+- So a book with loan history cannot be deleted. The API returns 409.
+
+## Transaction
+
+Borrowing has three steps: lock the copy, check that it is not borrowed, add the loan. They run in one transaction.
+
+The copy is locked with `SELECT ... FOR UPDATE`. If two requests borrow the same copy, the second one waits. Then it sees the active loan and gets 409. If something fails, nothing is saved.
+
+Returning changes only one row, so `SaveChanges` is enough.
+
+The service uses a small `ITransaction` interface, so it does not depend on EF Core and can be unit tested.
+
+## Migrations
+
+- Migrations are in the repository.
+- The schema is created from zero by running the migrations.
+- In Docker, migrations run when the app starts. Locally they are run by hand.
+
+## Queries
+
+- Filtering and paging run in SQL.
+- The list of copies loads active loans in the same query, so there is no N+1.
+
+## Errors
+
+- Duplicate ISBN or inventory number returns 409.
+- Borrowing a borrowed copy returns 409.
+- Returning a copy that is not borrowed returns 409.
+- Deleting a book with loan history returns 409.
+- A missing book or copy returns 404.
+- Database errors are found by error code and constraint name and turned into 409.
+
+## Docker
+
+- `Dockerfile` builds the app with the SDK image and runs it with the smaller ASP.NET image.
+- The app does not run as root.
+- `docker-compose.yml` starts the API and PostgreSQL. The API waits until the database is ready.
+- Start with `docker compose up --build`.
+
+## Testing
+
+- All week 2 unit tests still pass. Unit tests do not use a database.
+- `LendingService` is tested with a fake repository: borrow, double borrow, return, return without loan, history and not found cases.
+- The transaction is tested with a fake `ITransaction`: commit on success, no commit on error.
+- The lock and the database rules are checked by hand with the `.http` file. Automatic tests for them need a real database, so they are integration tests.
+
+## What could be improved
+
+- Add integration tests with a real PostgreSQL.
+- Store readers in a table instead of a name.
+- Add a due date for loans.
+- Run migrations as a separate step, not when the app starts.
+
+## What was hard
+
+The hardest part was making double borrowing impossible. A check in code is not enough when two requests come at the same time. The solution is a lock in a transaction and a unique index in the database.
+
+Also the `.http` file. At first it worked only with an empty database, so a second run failed. Now it creates its own data and deletes it at the end.
