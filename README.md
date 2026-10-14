@@ -93,3 +93,21 @@ Use an id that does not exist:
 ```
 00000000-0000-0000-0000-000000000001
 ```
+
+## Run with Docker
+
+Install Docker Desktop, then run from the repository root:
+
+```bash
+docker compose up --build
+```
+
+- API and Swagger: http://localhost:8080/swagger
+- The database schema is created by migrations on startup.
+- PostgreSQL is available on `localhost:5433` (database, user and password: `bookcatalog`).
+
+To start again with an empty database:
+
+```bash
+docker compose down -v
+```
