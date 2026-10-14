@@ -111,3 +111,14 @@ To start again with an empty database:
 ```bash
 docker compose down -v
 ```
+
+## Run tests
+
+Docker must be running: integration tests start PostgreSQL in a container.
+
+```bash
+dotnet test
+```
+
+This runs unit tests and integration tests. 
+Integration tests call the API over HTTP against a real PostgreSQL database that is created from migrations and removed after the run.
