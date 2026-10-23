@@ -6,7 +6,6 @@ namespace BookCatalog.Api.Controllers;
 
 [ApiController]
 [Route("api/books")]
-[Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class BooksController(IBookService bookService) : ControllerBase
 {
@@ -78,11 +77,11 @@ public class BooksController(IBookService bookService) : ControllerBase
     [HttpDelete("{id:guid}")]
     [EndpointSummary("Delete a book")]
     [EndpointDescription(
-        "Deletes a book together with its copies. Responds with 404 if no book has the given id " +   // ←
-        "and with 409 if any of its copies has loan history.")]                                       // ←
+        "Deletes a book together with its copies. Responds with 404 if no book has the given id " + 
+        "and with 409 if any of its copies has loan history.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]                      // ←
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(
         Guid id,
         CancellationToken cancellationToken)

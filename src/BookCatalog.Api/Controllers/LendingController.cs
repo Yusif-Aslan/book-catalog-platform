@@ -6,7 +6,6 @@ namespace BookCatalog.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-[Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class LendingController(ILendingService lendingService) : ControllerBase
 {
