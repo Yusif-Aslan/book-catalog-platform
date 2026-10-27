@@ -12,6 +12,10 @@ public static class DependencyInjection
         services.AddDbContext<BookCatalogDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IBookRepository, EfBookRepository>();
         services.AddScoped<ILendingRepository, EfLendingRepository>();
+
+        services.AddHealthChecks()
+            .AddDbContextCheck<BookCatalogDbContext>("database", tags: [HealthCheckTags.Ready]);
+
         return services;
     }
 
@@ -20,6 +24,5 @@ public static class DependencyInjection
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<BookCatalogDbContext>();
         await db.Database.MigrateAsync(cancellationToken);
-        
     }
 }

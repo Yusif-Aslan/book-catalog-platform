@@ -261,6 +261,8 @@ DELETE {{host}}/api/books/{{lendingBookId}}
     });
 %}
 
+
+
 ### 9a. Cleanup: delete Clean Code
 DELETE {{host}}/api/books/{{bookId}}
 
@@ -285,5 +287,23 @@ DELETE {{host}}/api/books/{{refactoringId}}
 > {%
     client.test("Deleted", function () {
         client.assert(response.status === 204, "Expected 204, got " + response.status);
+    });
+%}
+
+### 10a. Liveness
+GET {{host}}/health/live
+
+> {%
+    client.test("Process is alive", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+### 10b. Readiness
+GET {{host}}/health/ready
+
+> {%
+    client.test("Service is ready", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
     });
 %}

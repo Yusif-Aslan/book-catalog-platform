@@ -1,7 +1,8 @@
+using BookCatalog.Api.ErrorHandling;
 using BookCatalog.Application.Books;
 using BookCatalog.Application.Lending;
 using BookCatalog.Infrastructure;
-using BookCatalog.Api.ErrorHandling;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +48,17 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false
+});
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains(HealthCheckTags.Ready)
+});
+
 app.MapControllers();
 
-await app.RunAsync(); 
+await app.RunAsync();
