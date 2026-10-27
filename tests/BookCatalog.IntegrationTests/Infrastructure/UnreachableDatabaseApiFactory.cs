@@ -13,5 +13,7 @@ public sealed class UnreachableDatabaseApiFactory : WebApplicationFactory<Progra
         builder.UseEnvironment("Testing");
         builder.UseSetting("ConnectionStrings:BookCatalog", UnreachableConnectionString);
         builder.UseSetting("Database:MigrateOnStartup", "false");
+        builder.UseSetting("Database:MaxRetryCount", "1");
+        builder.UseSetting("Database:MaxRetryDelaySeconds", "1");
     }
 }

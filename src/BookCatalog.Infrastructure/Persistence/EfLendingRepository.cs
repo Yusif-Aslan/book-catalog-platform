@@ -36,8 +36,25 @@ public sealed class EfLendingRepository(BookCatalogDbContext db) : ILendingRepos
         }
     }
 
-    public async Task<ITransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) =>
-        new EfTransaction(await db.Database.BeginTransactionAsync(cancellationToken));
+    public Task<T> ExecuteInTransactionAsync<T>(
+        Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken = default)
+    {
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        return strategy.ExecuteAsync(
+            async token =>
+            {
+                db.ChangeTracker.Clear();
+
+                await using var transaction = await db.Database.BeginTransactionAsync(token);
+                var result = await operation(token);
+                await transaction.CommitAsync(token);
+
+                return result;
+            },
+            cancellationToken);
+    }
 
     public async Task<bool> LockCopyAsync(Guid copyId, CancellationToken cancellationToken = default)
     {
