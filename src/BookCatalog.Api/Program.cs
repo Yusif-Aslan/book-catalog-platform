@@ -8,6 +8,8 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(20));
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi(options =>
 {
@@ -29,7 +31,6 @@ builder.Services.AddHttpLogging(options =>
     options.CombineLogs = true;
 });
 builder.Services.AddProblemDetails();
-builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(20));
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddOptions<DatabaseOptions>()
@@ -62,9 +63,6 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/openapi/v1.json", "BookCatalog API v1");
     });
 }
-
-app.UseHttpsRedirection();
-app.UseAuthorization();
 
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
