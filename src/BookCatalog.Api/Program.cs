@@ -29,6 +29,7 @@ builder.Services.AddHttpLogging(options =>
     options.CombineLogs = true;
 });
 builder.Services.AddProblemDetails();
+builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(20));
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddOptions<DatabaseOptions>()
