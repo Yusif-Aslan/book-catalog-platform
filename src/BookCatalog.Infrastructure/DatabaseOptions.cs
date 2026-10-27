@@ -10,4 +10,8 @@ public sealed class DatabaseOptions
     public bool MigrateOnStartup { get; set; }
 
     public int CommandTimeoutSeconds { get; set; } = 30;
+
+    public int MaxRetryCount { get; set; } = 3;
+
+    public int MaxRetryDelaySeconds { get; set; } = 5;
 }

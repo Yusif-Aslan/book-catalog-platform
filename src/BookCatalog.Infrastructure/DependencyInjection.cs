@@ -16,8 +16,12 @@ public static class DependencyInjection
         {
             var database = serviceProvider.GetRequiredService<IOptions<DatabaseOptions>>().Value;
 
-            options.UseNpgsql(database.ConnectionString, npgsql =>
-                npgsql.CommandTimeout(database.CommandTimeoutSeconds));
+            options.UseNpgsql(database.ConnectionString, npgsql => npgsql
+                .CommandTimeout(database.CommandTimeoutSeconds)
+                .EnableRetryOnFailure(
+                    database.MaxRetryCount,
+                    TimeSpan.FromSeconds(database.MaxRetryDelaySeconds),
+                    errorCodesToAdd: null));
         });
 
         services.AddScoped<IBookRepository, EfBookRepository>();

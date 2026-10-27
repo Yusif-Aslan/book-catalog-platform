@@ -48,32 +48,13 @@ public class LendingService(
 
     public async Task<Loan?> BorrowAsync(Guid copyId, string borrowerName, CancellationToken cancellationToken = default)
     {
-        await using var transaction = await repository.BeginTransactionAsync(cancellationToken);
+        var loan = await repository.ExecuteInTransactionAsync(
+            token => CreateLoanAsync(copyId, borrowerName, token),
+            cancellationToken);
 
-        if (!await repository.LockCopyAsync(copyId, cancellationToken))
-        {
-            logger.LogInformation("Borrow skipped: copy {CopyId} not found", copyId);
-            return null;
-        }
+        if (loan is not null)
+            logger.LogInformation("Copy {CopyId} borrowed, loan {LoanId}", copyId, loan.Id);
 
-        if (await repository.HasActiveLoanAsync(copyId, cancellationToken))
-        {
-            logger.LogInformation("Rejected borrow: copy {CopyId} is already borrowed", copyId);
-            throw new CopyAlreadyBorrowedException(copyId);
-        }
-
-        var loan = new Loan
-        {
-            Id = Guid.NewGuid(),
-            BookCopyId = copyId,
-            BorrowerName = borrowerName.Trim(),
-            BorrowedAt = timeProvider.GetUtcNow().UtcDateTime
-        };
-
-        await repository.AddLoanAsync(loan, cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        logger.LogInformation("Copy {CopyId} borrowed, loan {LoanId}", copyId, loan.Id);
         return loan;
     }
 
@@ -109,5 +90,31 @@ public class LendingService(
         }
 
         return await repository.GetLoanHistoryAsync(copyId, cancellationToken);
+    }
+
+    private async Task<Loan?> CreateLoanAsync(Guid copyId, string borrowerName, CancellationToken cancellationToken)
+    {
+        if (!await repository.LockCopyAsync(copyId, cancellationToken))
+        {
+            logger.LogInformation("Borrow skipped: copy {CopyId} not found", copyId);
+            return null;
+        }
+
+        if (await repository.HasActiveLoanAsync(copyId, cancellationToken))
+        {
+            logger.LogInformation("Rejected borrow: copy {CopyId} is already borrowed", copyId);
+            throw new CopyAlreadyBorrowedException(copyId);
+        }
+
+        var loan = new Loan
+        {
+            Id = Guid.NewGuid(),
+            BookCopyId = copyId,
+            BorrowerName = borrowerName.Trim(),
+            BorrowedAt = timeProvider.GetUtcNow().UtcDateTime
+        };
+
+        await repository.AddLoanAsync(loan, cancellationToken);
+        return loan;
     }
 }

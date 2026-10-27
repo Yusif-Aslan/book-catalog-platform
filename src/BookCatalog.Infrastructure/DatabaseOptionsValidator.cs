@@ -13,6 +13,8 @@ public sealed class DatabaseOptionsValidator : IValidateOptions<DatabaseOptions>
 
         ValidateConnectionString(options.ConnectionString, errors);
         ValidateRange(nameof(DatabaseOptions.CommandTimeoutSeconds), options.CommandTimeoutSeconds, 1, 300, errors);
+        ValidateRange(nameof(DatabaseOptions.MaxRetryCount), options.MaxRetryCount, 0, 10, errors);
+        ValidateRange(nameof(DatabaseOptions.MaxRetryDelaySeconds), options.MaxRetryDelaySeconds, 1, 60, errors);
 
         return errors.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);
     }

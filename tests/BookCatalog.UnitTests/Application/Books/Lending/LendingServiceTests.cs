@@ -14,12 +14,13 @@ public class LendingServiceTests
     private static readonly DateTime EarlierTime = new(2026, 1, 10, 9, 0, 0, DateTimeKind.Utc);
 
     private readonly ILendingRepository _repository = Substitute.For<ILendingRepository>();
-    private readonly ITransaction _transaction = Substitute.For<ITransaction>();
     private readonly LendingService _service;
 
     public LendingServiceTests()
     {
-        _repository.BeginTransactionAsync(Arg.Any<CancellationToken>()).Returns(_transaction);
+        _repository
+            .ExecuteInTransactionAsync(Arg.Any<Func<CancellationToken, Task<Loan?>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Loan?>>>()(call.Arg<CancellationToken>()));
         _service = new LendingService(_repository, new FakeTimeProvider(Now), NullLogger<LendingService>.Instance);
     }
 
@@ -63,7 +64,7 @@ public class LendingServiceTests
     }
 
     [Fact]
-    public async Task BorrowAsync_WhenCopyDoesNotExist_ReturnsNullAndDoesNotCommit()
+    public async Task BorrowAsync_WhenCopyDoesNotExist_ReturnsNullAndDoesNotAddLoan()
     {
         var copyId = Guid.NewGuid();
         _repository.LockCopyAsync(Arg.Is(copyId), Arg.Any<CancellationToken>()).Returns(false);
@@ -72,11 +73,10 @@ public class LendingServiceTests
 
         Assert.Null(result);
         await _repository.DidNotReceive().AddLoanAsync(Arg.Any<Loan>(), Arg.Any<CancellationToken>());
-        await _transaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task BorrowAsync_WhenCopyIsAlreadyBorrowed_ThrowsAndRollsBack()
+    public async Task BorrowAsync_WhenCopyIsAlreadyBorrowed_ThrowsAndDoesNotAddLoan()
     {
         var copyId = Guid.NewGuid();
         _repository.LockCopyAsync(Arg.Is(copyId), Arg.Any<CancellationToken>()).Returns(true);
@@ -87,12 +87,10 @@ public class LendingServiceTests
 
         Assert.Equal(copyId, exception.CopyId);
         await _repository.DidNotReceive().AddLoanAsync(Arg.Any<Loan>(), Arg.Any<CancellationToken>());
-        await _transaction.DidNotReceive().CommitAsync(Arg.Any<CancellationToken>());
-        await _transaction.Received(1).DisposeAsync();
     }
 
     [Fact]
-    public async Task BorrowAsync_WhenCopyIsAvailable_SavesLoanAndCommits()
+    public async Task BorrowAsync_WhenCopyIsAvailable_SavesLoanInsideOneTransaction()
     {
         var copyId = Guid.NewGuid();
         _repository.LockCopyAsync(Arg.Is(copyId), Arg.Any<CancellationToken>()).Returns(true);
@@ -106,7 +104,9 @@ public class LendingServiceTests
         Assert.Equal(Now.UtcDateTime, loan.BorrowedAt);
         Assert.Null(loan.ReturnedAt);
         await _repository.Received(1).AddLoanAsync(Arg.Is(loan), Arg.Any<CancellationToken>());
-        await _transaction.Received(1).CommitAsync(Arg.Any<CancellationToken>());
+        await _repository.Received(1).ExecuteInTransactionAsync(
+            Arg.Any<Func<CancellationToken, Task<Loan?>>>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

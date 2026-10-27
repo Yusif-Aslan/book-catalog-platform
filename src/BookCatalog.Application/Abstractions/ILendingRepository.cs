@@ -12,7 +12,9 @@ public interface ILendingRepository
 
     Task AddCopyAsync(BookCopy copy, CancellationToken cancellationToken = default);
 
-    Task<ITransaction> BeginTransactionAsync(CancellationToken cancellationToken = default);
+    Task<T> ExecuteInTransactionAsync<T>(
+        Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken = default);
 
     Task<bool> LockCopyAsync(Guid copyId, CancellationToken cancellationToken = default);
 
