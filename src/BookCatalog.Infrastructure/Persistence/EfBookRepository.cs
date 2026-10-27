@@ -14,31 +14,7 @@ public sealed class EfBookRepository(BookCatalogDbContext db) : IBookRepository
 
     public async Task<PagedResult<Book>> GetPageAsync(BookQuery query, CancellationToken cancellationToken = default)
     {
-        IQueryable<Book> books = db.Books.AsNoTracking();
-
-        if (!string.IsNullOrWhiteSpace(query.Title))
-        {
-            var pattern = $"%{EscapeLikePattern(query.Title)}%";
-            books = books.Where(b => EF.Functions.ILike(b.Title, pattern, LikeEscapeCharacter));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Author))
-        {
-            var pattern = $"%{EscapeLikePattern(query.Author)}%";
-            books = books.Where(b => EF.Functions.ILike(b.Author, pattern, LikeEscapeCharacter));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Genre))
-        {
-            var pattern = EscapeLikePattern(query.Genre);
-            books = books.Where(b => b.Genre != null && EF.Functions.ILike(b.Genre, pattern, LikeEscapeCharacter));
-        }
-
-        if (query.PublishedFrom is { } publishedFrom)
-            books = books.Where(b => b.PublishedYear >= publishedFrom);
-
-        if (query.PublishedTo is { } publishedTo)
-            books = books.Where(b => b.PublishedYear <= publishedTo);
+        var books = ApplyFilters(db.Books.AsNoTracking(), query);
 
         var totalCount = await books.CountAsync(cancellationToken);
 
@@ -98,9 +74,9 @@ public sealed class EfBookRepository(BookCatalogDbContext db) : IBookRepository
 
             return deletedRows > 0;
         }
-        catch (Exception ex) when (PostgresErrors.IsForeignKeyViolation(ex))     
+        catch (Exception ex) when (PostgresErrors.IsForeignKeyViolation(ex))
         {
-            throw new BookHasLoanHistoryException(id);                           
+            throw new BookHasLoanHistoryException(id);
         }
     }
 
@@ -114,6 +90,35 @@ public sealed class EfBookRepository(BookCatalogDbContext db) : IBookRepository
         {
             throw new DuplicateIsbnException(book.Isbn!);
         }
+    }
+
+    private static IQueryable<Book> ApplyFilters(IQueryable<Book> books, BookQuery query)
+    {
+        if (!string.IsNullOrWhiteSpace(query.Title))
+        {
+            var pattern = $"%{EscapeLikePattern(query.Title)}%";
+            books = books.Where(b => EF.Functions.ILike(b.Title, pattern, LikeEscapeCharacter));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Author))
+        {
+            var pattern = $"%{EscapeLikePattern(query.Author)}%";
+            books = books.Where(b => EF.Functions.ILike(b.Author, pattern, LikeEscapeCharacter));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Genre))
+        {
+            var pattern = EscapeLikePattern(query.Genre);
+            books = books.Where(b => b.Genre != null && EF.Functions.ILike(b.Genre, pattern, LikeEscapeCharacter));
+        }
+
+        if (query.PublishedFrom is { } publishedFrom)
+            books = books.Where(b => b.PublishedYear >= publishedFrom);
+
+        if (query.PublishedTo is { } publishedTo)
+            books = books.Where(b => b.PublishedYear <= publishedTo);
+
+        return books;
     }
 
     private static string EscapeLikePattern(string value) =>

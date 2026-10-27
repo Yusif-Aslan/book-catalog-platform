@@ -35,7 +35,7 @@ public class BooksController(IBookService bookService) : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        var book = await bookService.GetByIdAsync(id, cancellationToken);  
+        var book = await bookService.GetByIdAsync(id, cancellationToken);
         return book is null ? NotFound() : Ok(book.ToResponse());
     }
 
@@ -77,7 +77,7 @@ public class BooksController(IBookService bookService) : ControllerBase
     [HttpDelete("{id:guid}")]
     [EndpointSummary("Delete a book")]
     [EndpointDescription(
-        "Deletes a book together with its copies. Responds with 404 if no book has the given id " + 
+        "Deletes a book together with its copies. Responds with 404 if no book has the given id " +
         "and with 409 if any of its copies has loan history.")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
