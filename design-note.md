@@ -1,230 +1,244 @@
-# Design Note
+# Design Note — Book Catalog Platform
 
-# Week 1
+Final version for the end of month 1. It covers the whole month: what was built, how it changed week by week, why the main decisions were made, and where the system is weak.
 
-## What was built
+## 1. What the platform does
 
-A REST API for a book catalog. You can create, list, get, update and delete books. Books are stored in memory.
+A REST API for a library catalog.
 
-## Structure
+- **Books**: create, list with filters and paging, get, update, delete.
+- **Copies**: a book can have several physical copies. Each copy has a unique inventory number.
+- **Lending**: a copy can be borrowed and returned. Every copy keeps its loan history.
+- **Operations**: health checks, JSON logs, configuration checked at startup, retries for short database failures, graceful shutdown.
 
-- `Controllers` handle HTTP requests.
-- `Contracts` are the request models the client sends.
-- `Models` contains the `Book` entity.
-- `Services` stores books and applies business rules.
-- `Validation` contains custom validation for ISBN and year.
+It runs with one command (`docker compose up --build`), and all tests run with one command (`dotnet test`).
 
-## Decisions
+## 2. Architecture now
 
-- The book id is a `Guid`, so no counter is needed.
-- The service is a Singleton, so the data stays alive while the app runs.
-- Requests are validated with attributes. Invalid requests get a 400 with clear errors.
-- All errors use the same format (ProblemDetails).
-- A book's ISBN must be unique. A duplicate returns 409 Conflict.
-- Important operations and errors are logged.
-- Swagger documents every endpoint.
+Four projects with a strict dependency direction:
 
-## What could be improved
+```
+Api ──► Application ──► Domain
+ │           ▲
+ └──► Infrastructure
+```
 
-- Separate business logic from storage.
-- Return a response model instead of the `Book` entity.
-- Add pagination, filtering and unit tests.
+| Project | Contains | Depends on |
+| --- | --- | --- |
+| `Domain` | `Book`, `BookCopy`, `Loan` | nothing |
+| `Application` | `BookService`, `LendingService`, repository interfaces, business exceptions | `Domain` |
+| `Infrastructure` | EF Core `DbContext`, configurations, migrations, repositories, `DatabaseOptions`, health check registration | `Application`, `Domain` |
+| `Api` | controllers, contracts, validation, `GlobalExceptionHandler`, `Program.cs` | `Application`, `Infrastructure` |
 
-## What was hard
+A request goes: controller → service → repository interface → EF Core repository → PostgreSQL.
 
-The hardest part was the ISBN checks: validating ISBN-10 and ISBN-13 checksums, and making sure two books cannot have the same ISBN.
+- Business rules live in the services. They do not know about HTTP or EF Core.
+- The database is the final guard for rules that must hold under concurrency: unique indexes, foreign keys, a partial unique index for active loans, a check constraint for dates.
+- `Api` uses `Infrastructure` only in `Program.cs` (registration) and in the error handler (to recognise a database outage).
 
-Uniqueness was tricky because of race conditions. Two requests could check the same ISBN at the same time, both see it is free, and both save it. This is solved with a `lock`, so checking and saving happen as one step.
+## 3. How it evolved
 
-# Week 2
+### Week 1 — one project, data in memory
 
-## What was built
+Controllers, request validation with attributes (ISBN-10/13 checksum, publication year), ProblemDetails for every error, 409 for a duplicate ISBN, Swagger. Books were kept in a Singleton service with a `lock`, because the service did both business logic and storage.
 
-The project is split into layers. The book list has pagination and filtering. Errors are handled in one place. Unit tests are added.
+### Week 2 — layers and tests
 
-## Structure
+The single project was split into `Domain`, `Application`, `Infrastructure` and `Api`. Storage moved behind `IBookRepository`. The service stopped using HTTP request types (`BookDetails` instead of `CreateBookRequest`) and `DateTime.UtcNow` (`TimeProvider` instead). Errors moved into one `GlobalExceptionHandler`. Paging and filtering were added. Unit tests with xUnit and NSubstitute were added.
 
-Now there are four projects instead of one:
+Splitting was harder than expected: the `lock` that protected ISBN uniqueness only worked because everything was in one class.
 
-- `Domain` has the `Book` entity.
-- `Application` has the business logic (`BookService`) and the `IBookRepository` interface.
-- `Infrastructure` has `InMemoryBookRepository`, which stores the books.
-- `Api` has controllers, request and response models, validation and error handling.
+### Week 3 — PostgreSQL, lending, Docker
 
-There is also a `UnitTests` project.
+EF Core with PostgreSQL replaced the in-memory repository. The `lock` was replaced by a unique index. `BookCopy` and `Loan` were added, with borrowing protected by `SELECT ... FOR UPDATE` and a partial unique index. A Dockerfile and `docker-compose.yml` start the API and the database together.
 
-`Application` uses `Domain`. `Infrastructure` uses `Application` and `Domain`. `Api` uses `Application` and `Infrastructure`.
+### Week 4 — production readiness
 
-## What changed
+- Integration tests through real HTTP and a real PostgreSQL.
+- Liveness and readiness health checks.
+- JSON logs with a trace id on every entry, one entry per request.
+- Configuration validated at startup.
+- Graceful shutdown with a bounded timeout.
+- Retries for transient database errors, and 503 instead of 500 when the database is down.
+- Cleanup: removed dead code (`ITransaction`, `EfTransaction`, unused middleware), replaced a prerelease package, split a long method, rewrote the README.
 
-- The service had logic and storage together. Now storage is in a separate repository.
-- The service took `CreateBookRequest`. Now it takes `BookDetails`, so it does not know about HTTP.
-- The controller returned `Book`. Now it returns `BookResponse`.
-- Every controller method had `try/catch`. Now errors are handled in one place.
-- The list returned all books. Now it returns one page and can be filtered.
-- The service used `DateTime.UtcNow`. Now it gets the time from `TimeProvider`.
+## 4. Key decisions
 
-## Decisions
+### Layers as separate projects
 
-- `IBookRepository` is in `Application`, not in `Infrastructure`. This way the logic does not depend on storage. To use another storage, only a new repository needs to be added and one line in `Program.cs` changed.
-- `Api` uses `Infrastructure` only in `Program.cs`, to register the repository.
-- Layers are separate projects, not folders, so a wrong reference does not compile.
-- All repository methods are async and have a `CancellationToken`, so a real database can be used without changing the interface.
-- The repository is a Singleton, so the books stay in memory. The service is Scoped, because it has no data.
-- Models are mapped by hand in `BookMappings`. There are not many fields, so a library is not needed.
-- Create and update use the same `BookDetails`, because they have the same fields.
-- The service checks if the ISBN is free before saving. The repository checks it again under a `lock`, in case two requests come at the same time.
+A wrong reference (for example `Application` using EF Core) does not compile. With folders it would only be a convention.
 
-## Pagination and filtering
+*Against it:* more projects and more ceremony for a small API. For one developer a single project with folders would also work.
 
-- `page` starts from 1. `pageSize` is 20 by default, max 100.
-- The response has the books, `totalCount` and `totalPages`.
-- If the page is after the end, the list is empty, not an error.
-- The list can be filtered by `title`, `author`, `genre`, `publishedFrom` and `publishedTo`.
-- Title and author can match part of the text. Genre must match fully. Case does not matter.
-- `totalCount` counts only the books that match the filters.
-- Filtering and paging are in the repository, not in the service, so with a database they can run in SQL.
+### A copy is borrowed, not a book
 
-## Error handling
+A library has several copies of the same book. Lending a `Book` would allow only one loan at a time per title, or would need a counter that is easy to get wrong.
 
-- All errors go to `GlobalExceptionHandler`.
-- Business errors like duplicate ISBN return 409 with a clear message.
-- Unknown errors return 500 with a general message. Details are only in the logs.
-- Every error has a `traceId`, so it can be found in the logs.
+### Concurrency is enforced by the database
 
-## Testing
+Two requests that borrow the same copy at the same time must not both succeed. Checking in C# is not enough, because both requests can pass the check before either saves.
 
-- Tools: xUnit and NSubstitute.
-- `BookService` is tested with a fake repository.
-- ISBN, year and query validation are tested.
-- Filtering and paging in `InMemoryBookRepository` are tested.
-- Tests do not use any database, file or network.
-- Controllers and the error handler are not tested. That needs real HTTP, so it is integration testing, not unit testing.
-- There is no coverage percentage goal. The goal is to cover every rule and every error case.
+- The copy row is locked with `SELECT ... FOR UPDATE` inside a transaction. The second request waits, then sees the active loan and gets 409.
+- A partial unique index (`BookCopyId` where `ReturnedAt IS NULL`) makes a second active loan impossible even if the code has a bug.
+- The same idea is used for ISBN and inventory number: the service checks first to give a clear message, the unique index is the real guarantee.
 
-## What was painful to change
+The integration test `Borrow_SameCopyConcurrently_OnlyOneRequestSucceeds` sends five borrow requests at once and checks that exactly one gets 201.
 
-- The service had logic and storage in one class, so it had to be split.
-- The service used `CreateBookRequest`, so it could not be moved until that was changed.
-- `DateTime.UtcNow` made dates hard to test, so `TimeProvider` was added.
-- The `lock` only worked because everything was in one class. After the split, ISBN uniqueness had to be designed again.
+### ProblemDetails for every error
 
-The week 1 code worked, but one class did too many things. That is why it was hard to change.
+Every error has the same shape and a `traceId`. Business conflicts are exceptions that inherit `ConflictException`, so the handler maps all of them to 409 in one place.
 
-## What could be improved
+The integration tests found a bug here: `[Produces("application/json")]` on the controllers changed the content type of 400 and 404 errors to `application/json`, while 409 and 500 were `application/problem+json`. The attribute was removed.
 
-- Put ISBN normalization and checksum in one place.
-- Add integration tests.
+### Integration tests with Testcontainers and Respawn
 
-## What was hard
+- **Real PostgreSQL in Docker**, not SQLite or the EF in-memory provider. The features that matter most (`FOR UPDATE`, partial unique index, `ILIKE`, constraint error codes) only exist in PostgreSQL.
+- **One container for the whole run**, schema created by the real migrations. Starting a container per test would be too slow.
+- **Respawn clears all tables before each test**, except the migrations history. Each test creates its own data, so tests do not depend on each other or on order.
+- **Tests run one after another** inside the shared collection, because they share one database.
+- The container is removed after the run, so nothing is left behind.
 
-Splitting the ISBN check between the service and the repository and still keeping it safe.
+*Trade-off:* the tests need Docker. Without it, 22 tests fail with a connection error from Testcontainers.
 
-Also Git. When Rider moved files, it changed `using` in other files too, but only the moved files were committed. So some early commits do not build. Now the solution is built and all changed files are checked before each commit.
+### Health checks: live and ready
 
+- `/health/live` runs no checks. It answers "is the process running and able to serve HTTP?".
+- `/health/ready` checks that the database accepts a connection. It answers "can the service do its job?".
 
+If the database is down, `live` stays 200 and `ready` returns 503. Restarting the API would not fix the database, so the container health check in Docker uses `live`. A load balancer or orchestrator should use `ready` to decide whether to send traffic.
 
-# Week 3
+The responses are plain text (`Healthy` / `Unhealthy`) without details, so the endpoints reveal nothing about the internals and can stay public.
 
-## What was built
+### Logging
 
-Books are stored in PostgreSQL with EF Core. A book can have copies, and a copy can be borrowed and returned. The app and the database start with one Docker command.
+- **Format:** the built-in JSON console formatter, one JSON object per line. No extra library was needed.
+- **Tracing a request:** scopes are included, so every entry written during a request carries `TraceId`, `SpanId`, `RequestId` and `RequestPath`. The same trace id is in every error response.
+- **One entry per request:** HTTP logging writes method, path, status code and duration. Headers, query strings and bodies are not logged. Health check requests are not logged, because a probe every few seconds would drown everything else.
+- **Never logged:** borrower names, passwords, connection strings, request bodies. Configuration errors name the setting but never print its value.
+- **Noise reduction:** EF Core SQL logs are at Warning outside Development.
 
-## Structure
+Rule for levels:
 
-The four projects stay the same. New parts:
+| Level | Used for | Example |
+| --- | --- | --- |
+| Debug | reads that found nothing | book not found on `GET` |
+| Information | business events and rejected client requests (4xx) | book created, copy borrowed, duplicate ISBN |
+| Warning | something unusual the system handled by itself | — (not used by own code yet) |
+| Error | the request failed because of us or a dependency (5xx) | unhandled exception, database unavailable |
 
-- `Domain` has `BookCopy` and `Loan`.
-- `Application` has `LendingService`, `ILendingRepository` and `ITransaction`.
-- `Infrastructure` has `BookCatalogDbContext`, entity configurations, migrations, `EfBookRepository` and `EfLendingRepository`.
-- `Api` has `LendingController`.
+A rejected request is not a Warning: it is the client's mistake, and nothing needs to be done about it at 3 a.m. Before week 4, "already borrowed" and "duplicate ISBN" were Warnings. They were moved to Information.
 
-## What changed
+### Configuration validated at startup
 
-- Books were stored in memory. Now they are stored in PostgreSQL.
-- `InMemoryBookRepository` is removed. `EfBookRepository` is used instead.
-- The `lock` for ISBN is removed. A unique index in the database does this job now.
-- Filtering and paging run in SQL.
-- Copies, borrowing, returning and loan history are added.
+`DatabaseOptions` holds the connection string, `MigrateOnStartup`, the command timeout and the retry settings. `DatabaseOptionsValidator` checks them, and `ValidateOnStart` plus reading the options right after `Build()` make the API stop before it accepts any request.
 
-## Data model
+The errors name the exact setting, for example `ConnectionStrings:BookCatalog must specify Host.`, and never include the connection string itself, because it contains a password.
 
-- `Book` is a book in the catalog.
-- `BookCopy` is one physical copy of a book. It has a unique inventory number.
-- `Loan` is one borrowing of one copy. `ReturnedAt` is empty while the copy is borrowed.
+Local secrets are in user secrets. Docker uses environment variables. The only credentials in the repository are the ones for the local Docker database.
 
-A copy is borrowed, not a book, because a library can have several copies of the same book.
+### Graceful shutdown
 
-The loan history is all loans of a copy. A loan is active when `ReturnedAt` is empty.
+On `SIGTERM` (`docker compose stop`), Kestrel stops accepting new connections and waits for running requests to finish, up to `ShutdownTimeout` (20 s). Docker waits `stop_grace_period` (30 s) before it kills the process, so the application always gets its full 20 s.
 
-## Rules in the database
+Nothing is left half-done:
 
-- Foreign keys for all relations.
-- Unique index on `Books.Isbn` and on `BookCopies.InventoryNumber`.
-- Unique index on `Loans.BookCopyId` only for loans where `ReturnedAt` is empty. A copy can have many old loans, but only one active loan.
-- `ReturnedAt` cannot be earlier than `BorrowedAt`.
+- Borrowing runs in one transaction. If a request is aborted, the transaction is rolled back.
+- Every other write is a single `SaveChanges` or a single `DELETE`, which is atomic.
 
-The service also checks these rules to return clear errors. The database is the final check.
+How it is verified is described in section 9.
 
-## Delete rules
+### Retries for transient failures
 
-- When a book is deleted, its copies are deleted too.
-- A copy with loans cannot be deleted. Loan history is kept.
-- So a book with loan history cannot be deleted. The API returns 409.
+EF Core's retrying execution strategy (`EnableRetryOnFailure`) retries a database operation after a transient error: network error, timeout, too many connections, deadlock or serialization failure. Retries are bounded: at most 3, with exponential backoff and random jitter, at most 5 s between attempts. All values are configurable and validated.
 
-## Transaction
+Borrowing uses its own transaction, which the retrying strategy does not allow by default. So the repository runs the whole unit (lock, check, insert, commit) through `ExecuteInTransactionAsync`. If it fails with a transient error, the whole unit is repeated, not only the last statement.
 
-Borrowing has three steps: lock the copy, check that it is not borrowed, add the loan. They run in one transaction.
+When all retries fail, the client gets **503 Service Unavailable** with `Retry-After: 10`, not a 500.
 
-The copy is locked with `SELECT ... FOR UPDATE`. If two requests borrow the same copy, the second one waits. Then it sees the active loan and gets 409. If something fails, nothing is saved.
+## 5. What is safe to retry
 
-Returning changes only one row, so `SaveChanges` is enough.
+| Operation | Safe to retry? | Why |
+| --- | --- | --- |
+| `GET` anything | yes | reads change nothing |
+| `PUT /api/books/{id}` | yes | idempotent: the same body gives the same state |
+| `DELETE /api/books/{id}` | mostly | second call returns 404 instead of 204, but the state is the same |
+| `POST /api/books` | no | a second call creates a second book (if it has no ISBN) |
+| `POST .../copies` | no, but protected | a second call fails with 409 on the inventory number |
+| `POST .../borrow` | no, but protected | a second call fails with 409, the copy is already borrowed |
+| `POST .../return` | no, but protected | a second call fails with 409, the copy is not borrowed |
 
-The service uses a small `ITransaction` interface, so it does not depend on EF Core and can be unit tested.
+The weak spot is a lost commit acknowledgement. If PostgreSQL commits a borrow but the connection drops before the API receives the answer, EF retries the whole unit. The retry sees the active loan and returns 409, although the borrow succeeded. The data is still correct, but the client gets the wrong answer. The fix would be an idempotency key sent by the client.
 
-## Migrations
+## 6. When the database is down for ten minutes
 
-- Migrations are in the repository.
-- The schema is created from zero by running the migrations.
-- In Docker, migrations run when the app starts. Locally they are run by hand.
+1. `/health/ready` returns 503 on the next probe. `/health/live` stays 200, so the container is not restarted.
+2. Every API request that needs the database is retried up to 3 times, then returns **503 with `Retry-After: 10`**. Users see an error after a few seconds. No request hangs forever.
+3. Each failed request is logged at Error with its trace id, so the outage is visible in the logs.
+4. No data is corrupted: writes either committed before the outage or were rolled back.
+5. When the database comes back, the next request works. Nothing has to be restarted.
 
-## Queries
+The cost: during those ten minutes, every request still tries the database and waits for its retries. That is the problem a **circuit breaker** solves: after several failures it stops calling the database for a while and fails immediately, which protects the database when it comes back and gives users a fast answer. There is no circuit breaker in this project. It would need Polly or a custom one, and with one API instance and one database it was not the most important thing to add.
 
-- Filtering and paging run in SQL.
-- The list of copies loads active loans in the same query, so there is no N+1.
+## 7. What I would do differently
 
-## Errors
+- **Start with the real database and integration tests.** The in-memory repository and the `lock` in weeks 1 and 2 were rewritten in week 3. A PostgreSQL container from day one would have avoided writing concurrency code twice.
+- **Write integration tests before adding attributes for documentation.** `[Produces("application/json")]` was added for Swagger and silently changed the error content type. Only a test through real HTTP showed it.
+- **Use a separate migration step** instead of migrating on startup. With several instances, all of them would try to migrate at the same time.
+- **Store readers as entities**, not as a free-text borrower name. Today the same person can appear under different spellings, and the name is personal data stored without any rule for deleting it.
+- **Keep Git branches up to date.** One week-4 branch was created from an outdated local `main`, and the integration test project was missing from it.
 
-- Duplicate ISBN or inventory number returns 409.
-- Borrowing a borrowed copy returns 409.
-- Returning a copy that is not borrowed returns 409.
-- Deleting a book with loan history returns 409.
-- A missing book or copy returns 404.
-- Database errors are found by error code and constraint name and turned into 409.
+## 8. Known limitations and what breaks first under load
 
-## Docker
+Known limitations:
 
-- `Dockerfile` builds the app with the SDK image and runs it with the smaller ASP.NET image.
-- The app does not run as root.
-- `docker-compose.yml` starts the API and PostgreSQL. The API waits until the database is ready.
-- Start with `docker compose up --build`.
+- No authentication or authorization. Anyone who can reach the API can delete books.
+- `borrow` is not idempotent (see section 5).
+- `POST /api/books` with a lost commit acknowledgement is retried and fails on the primary key or the ISBN index. The client gets 500 or 409, although the book was created.
+- Two simultaneous `return` calls on the same copy can both succeed. The second overwrites `ReturnedAt`. The data stays valid, but one call should have been 409.
+- ISBN normalisation is done both in `IsbnAttribute` and in `BookService`.
+- No circuit breaker (see section 6).
+- Readiness does not switch to 503 when shutdown starts. Kestrel stops accepting connections, but a load balancer might still try to send requests for a moment.
+- Migrations run on startup.
 
-## Testing
+If ten thousand users arrive at once, the expected order of failure:
 
-- All week 2 unit tests still pass. Unit tests do not use a database.
-- `LendingService` is tested with a fake repository: borrow, double borrow, return, return without loan, history and not found cases.
-- The transaction is tested with a fake `ITransaction`: commit on success, no commit on error.
-- The lock and the database rules are checked by hand with the `.http` file. Automatic tests for them need a real database, so they are integration tests.
+1. **Database connections.** Npgsql allows 100 connections per instance by default. Requests beyond that wait for a free connection and then time out. The retries make it worse: a request that timed out is sent again.
+2. **Search queries.** `title` and `author` filters use `ILIKE '%text%'`, which cannot use a normal index, plus a `COUNT(*)` on every page. As the catalog grows, every search scans the whole table. A trigram index (`pg_trgm`) and keyset paging would help.
+3. **Borrowing a popular copy.** `FOR UPDATE` makes requests for the same copy wait for each other. That is correct, but it is a queue.
+4. **One API instance.** It has no state, so it can be scaled to several instances behind a load balancer. That is planned for month 2 in Azure.
 
-## What could be improved
+## 9. How graceful shutdown is verified
 
-- Add integration tests with a real PostgreSQL.
-- Store readers in a table instead of a name.
-- Add a due date for loans.
-- Run migrations as a separate step, not when the app starts.
+The idea: make a request slow on purpose, stop the API while the request is running, and check that it still finishes.
 
-## What was hard
+1. Start everything: `docker compose up --build -d`.
+2. In Swagger (http://localhost:8080/swagger), create a book and a copy. Note the `copyId`.
+3. Freeze the database: `docker compose pause db`. Every new database call now hangs.
+4. In Swagger, send `POST /api/copies/{copyId}/borrow`. It does not answer, because it is waiting for the database.
+5. In a terminal, stop the API: `docker compose stop api`. The command does not return immediately. The API is waiting for the running request.
+6. Within about 10 s, unfreeze the database: `docker compose unpause db`.
+7. Expected:
+   - Swagger shows **201 Created** for the borrow request.
+   - `docker compose stop api` returns after the request finished, not after 30 s.
+   - `docker compose logs api` shows `Application is shutting down...` **before** the log entry for `POST /api/copies/.../borrow` with status 201.
+8. Start the API again with `docker compose start api`. `GET /api/books/{bookId}/copies` shows the copy as not available. The loan was saved completely.
 
-The hardest part was making double borrowing impossible. A check in code is not enough when two requests come at the same time. The solution is a lock in a transaction and a unique index in the database.
+Negative case: repeat, but wait longer than 20 s before `unpause`. The API gives up and aborts the request. After restarting, the copy is still available. The transaction was rolled back, and no half-written loan exists.
 
-Also the `.http` file. At first it worked only with an empty database, so a second run failed. Now it creates its own data and deletes it at the end.
+## 10. Testing summary
+
+| Kind | What | Count |
+| --- | --- | --- |
+| Unit | `BookService`, `LendingService`, validation attributes, query validation, configuration validator, database failure detection | 82 |
+| Integration | books CRUD, filtering and paging, copies, borrow/return, concurrent borrow, delete with loan history, error formats, health checks, startup with bad configuration, 503 when the database is unreachable | 27 |
+
+A test that would still pass if the feature were broken: `GetAll_WithTitleFilterAndPaging` expects the second page to contain the second book created. If the `ORDER BY` were removed, PostgreSQL would most likely still return rows of a small table in insertion order, so the test would still pass. Ordering would need a test where insertion order and expected order differ.
+
+## 11. What I learned this month
+
+- Separating code into layers is easy when it is planned and painful when it is not. Week 2 was mostly undoing week 1.
+- A check in code is not a guarantee under concurrency. The database has to enforce it.
+- Unit tests with fakes cannot catch problems in configuration, middleware, content types or SQL. Integration tests found a real bug in the first run.
+- The difference between "the process is alive" and "the service works", and why a health check that touches the database must not be used to restart the container.
+- Retries are only safe when the operation can be repeated, and a write can succeed even when the client sees an error.
+- Logs are for someone who is not you, at 3 a.m. Every entry needs context on its own, and a rejected request is not a warning.
