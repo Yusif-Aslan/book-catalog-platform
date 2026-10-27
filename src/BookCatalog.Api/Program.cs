@@ -3,6 +3,7 @@ using BookCatalog.Application.Books;
 using BookCatalog.Application.Lending;
 using BookCatalog.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpLogging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,14 @@ builder.Services.AddOpenApi(options =>
             "Errors are returned as ProblemDetails (RFC 9457).";
         return Task.CompletedTask;
     });
+});
+builder.Services.AddHttpLogging(options =>
+{
+    options.LoggingFields = HttpLoggingFields.RequestMethod
+                            | HttpLoggingFields.RequestPath
+                            | HttpLoggingFields.ResponseStatusCode
+                            | HttpLoggingFields.Duration;
+    options.CombineLogs = true;
 });
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -34,6 +43,7 @@ var app = builder.Build();
 if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
     await app.Services.ApplyMigrationsAsync();
 
+app.UseHttpLogging();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
@@ -52,12 +62,12 @@ app.UseAuthorization();
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false
-});
+}).WithHttpLogging(HttpLoggingFields.None);
 
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains(HealthCheckTags.Ready)
-});
+}).WithHttpLogging(HttpLoggingFields.None);
 
 app.MapControllers();
 
