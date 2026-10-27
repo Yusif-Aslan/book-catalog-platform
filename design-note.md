@@ -1,7 +1,5 @@
 # Design Note — Book Catalog Platform
 
-Final version for the end of month 1. It covers the whole month: what was built, how it changed week by week, why the main decisions were made, and where the system is weak.
-
 ## 1. What the platform does
 
 A REST API for a library catalog.
@@ -233,12 +231,3 @@ Negative case: repeat, but wait longer than 20 s before `unpause`. The API gives
 | Integration | books CRUD, filtering and paging, copies, borrow/return, concurrent borrow, delete with loan history, error formats, health checks, startup with bad configuration, 503 when the database is unreachable | 27 |
 
 A test that would still pass if the feature were broken: `GetAll_WithTitleFilterAndPaging` expects the second page to contain the second book created. If the `ORDER BY` were removed, PostgreSQL would most likely still return rows of a small table in insertion order, so the test would still pass. Ordering would need a test where insertion order and expected order differ.
-
-## 11. What I learned this month
-
-- Separating code into layers is easy when it is planned and painful when it is not. Week 2 was mostly undoing week 1.
-- A check in code is not a guarantee under concurrency. The database has to enforce it.
-- Unit tests with fakes cannot catch problems in configuration, middleware, content types or SQL. Integration tests found a real bug in the first run.
-- The difference between "the process is alive" and "the service works", and why a health check that touches the database must not be used to restart the container.
-- Retries are only safe when the operation can be repeated, and a write can succeed even when the client sees an error.
-- Logs are for someone who is not you, at 3 a.m. Every entry needs context on its own, and a rejected request is not a warning.
