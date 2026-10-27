@@ -4,6 +4,7 @@ using BookCatalog.Application.Lending;
 using BookCatalog.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,17 +31,22 @@ builder.Services.AddHttpLogging(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
-var connectionString = builder.Configuration.GetConnectionString("BookCatalog")
-                       ?? throw new InvalidOperationException("Connection string 'BookCatalog' is not configured.");
+builder.Services.AddOptions<DatabaseOptions>()
+    .Bind(builder.Configuration.GetSection(DatabaseOptions.SectionName))
+    .Configure<IConfiguration>((options, configuration) =>
+        options.ConnectionString = configuration.GetConnectionString(DatabaseOptions.ConnectionStringName) ?? string.Empty)
+    .ValidateOnStart();
 
-builder.Services.AddInfrastructure(connectionString);
+builder.Services.AddInfrastructure();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IBookService, BookService>();
 builder.Services.AddScoped<ILendingService, LendingService>();
 
 var app = builder.Build();
 
-if (app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+var databaseOptions = app.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
+
+if (databaseOptions.MigrateOnStartup)
     await app.Services.ApplyMigrationsAsync();
 
 app.UseHttpLogging();
