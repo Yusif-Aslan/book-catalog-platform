@@ -32,11 +32,11 @@ public class BookService(
         return book;
     }
 
-    public async Task<Book> CreateAsync(BookDetails details, CancellationToken cancellationToken = default) 
+    public async Task<Book> CreateAsync(BookDetails details, CancellationToken cancellationToken = default)
     {
         var isbn = NormalizeIsbn(details.Isbn);
 
-        await EnsureIsbnIsUniqueAsync(isbn, excludeId: null, cancellationToken); 
+        await EnsureIsbnIsUniqueAsync(isbn, excludeId: null, cancellationToken);
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var book = new Book
@@ -114,7 +114,7 @@ public class BookService(
 
         if (await repository.IsbnExistsAsync(isbn, excludeId, cancellationToken))
         {
-            logger.LogWarning("Rejected book with duplicate ISBN {Isbn}", isbn);
+            logger.LogInformation("Rejected book with duplicate ISBN {Isbn}", isbn);
             throw new DuplicateIsbnException(isbn);
         }
     }

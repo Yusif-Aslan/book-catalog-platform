@@ -58,7 +58,7 @@ public class LendingService(
 
         if (await repository.HasActiveLoanAsync(copyId, cancellationToken))
         {
-            logger.LogWarning("Rejected borrow: copy {CopyId} is already borrowed", copyId);
+            logger.LogInformation("Rejected borrow: copy {CopyId} is already borrowed", copyId);
             throw new CopyAlreadyBorrowedException(copyId);
         }
 
@@ -89,7 +89,7 @@ public class LendingService(
                 return null;
             }
 
-            logger.LogWarning("Rejected return: copy {CopyId} is not borrowed", copyId);
+            logger.LogInformation("Rejected return: copy {CopyId} is not borrowed", copyId);
             throw new CopyNotBorrowedException(copyId);
         }
 
