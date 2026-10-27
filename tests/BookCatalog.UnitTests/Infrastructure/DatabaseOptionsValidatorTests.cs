@@ -61,6 +61,23 @@ public class DatabaseOptionsValidatorTests
         Assert.Contains($"Database:CommandTimeoutSeconds must be between 1 and 300, but was {seconds}.", result.Failures!);
     }
 
+    [Theory]
+    [InlineData(-1, 5, "Database:MaxRetryCount must be between 0 and 10, but was -1.")]
+    [InlineData(11, 5, "Database:MaxRetryCount must be between 0 and 10, but was 11.")]
+    [InlineData(3, 0, "Database:MaxRetryDelaySeconds must be between 1 and 60, but was 0.")]
+    [InlineData(3, 61, "Database:MaxRetryDelaySeconds must be between 1 and 60, but was 61.")]
+    public void Validate_WithRetrySettingsOutOfRange_Fails(int maxRetryCount, int maxRetryDelaySeconds, string expectedError)
+    {
+        var options = Options(ValidConnectionString);
+        options.MaxRetryCount = maxRetryCount;
+        options.MaxRetryDelaySeconds = maxRetryDelaySeconds;
+
+        var result = _validator.Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(expectedError, result.Failures!);
+    }
+
     [Fact]
     public void Validate_WithInvalidConnectionString_DoesNotRevealPassword()
     {
